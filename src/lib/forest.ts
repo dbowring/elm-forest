@@ -347,13 +347,16 @@ let environSpawn = function(version: string, cmd: string, args: string[]) {
 
 let writeVersionCache = function(versions: string[]): Promise<void> {
     let fname = path.join(expandRoot(), 'versions.json');
-    return new Promise<void>((resolve, reject) => {
-        jsonfile.writeFile(fname, versions, (err) => {
-            if (err) {
-                return reject(err);
-            } else {
-                resolve();
-            }
+    return mkdirp(expandRoot())
+        .then(() => {
+            new Promise<void>((resolve, reject) => {
+            jsonfile.writeFile(fname, versions, (err) => {
+                if (err) {
+                    return reject(err);
+                } else {
+                    resolve();
+                }
+            });
         });
     });
 };
