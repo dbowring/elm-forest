@@ -1,6 +1,6 @@
 # Elm Forest
 
-An elm version manager
+An elm version manager and proxy
 
 ## Installation
 
