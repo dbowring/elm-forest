@@ -128,9 +128,19 @@ var listCmd = function(args: string[]) {
         table.removeBorder();
         console.log(table.toString());
     };
-    var fail = function(reason) {
+    var fail = function(error) {
         console.error(shadower('failed to get elm versions'));
-        console.error(reason);
+
+        if (error.name === forest.Errors.NoElmVersions) {
+            console.error("Unable determine available elm versions");
+        } else if (error.name === forest.Errors.NpmCommunicationError) {
+            console.error("Error communicating with NPM");
+            console.error(error.message);
+        } else {
+            console.error("Unkown error");
+            console.error(error);
+        }
+
         process.exit(1);
     };
     forest.getElmVersions()
@@ -159,25 +169,24 @@ var initCmd = function(args: string[]) {
     }
 };
 
-var installCmd = function(args: string[]) {
-    // TODO: remove this command
-    let version = args[0] || '0.18';
-
-    if (args.length === 1) {
-        let version = args[0];
-        if (forest.isElmInstalled(version)) {
-            console.log('already installed');
-        } else {
-            forest.installVersion(version)
-                .then(() => {
-                    console.log('Installed Elm ', version, '!');
-                })
-                .catch((msg) => {
-                    console.error('Installation failed. ', msg);
-                });
-        }
+var installCmd = function(args: string[]): void {
+    if (args.length <= 1) {
+        let version = args[0] || 'latest';
+        forest.installVersion(version)
+            .then((info) => {
+                let fullVersion = info[0];
+                let didInstall = info[1];
+                if (didInstall) {
+                    console.log('Installed Elm', fullVersion, '!');
+                } else {
+                    console.log('Elm', fullVersion, 'is already installed.');
+                }
+            })
+            .catch((error) => {
+                console.error('Installation failed.', error);
+            });
     } else {
-        console.log('init requires only a version');
+        console.log('get allows at most one argument (what version to get)');
     }
 };
 
