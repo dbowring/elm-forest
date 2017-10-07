@@ -164,7 +164,6 @@ export let runInBest = function(cwd: string, args: string[]): Promise<number> {
 };
 
 export let findPackage = function(start: string): Promise<string> {
-    // TODO: Consider making this async
     return new Promise<string>((resolve, reject) => {
         let current = path.normalize(expandHomeDir(start));
         let parsed = path.parse(current);
@@ -258,13 +257,6 @@ export let findBestVersion = function(constraints) {
 /* ****************************************************************************
 *  Internal API
 */
-
-// let cacheVersions = function(versions) {
-//     let root = expandRoot();
-//     let fname = path.join(root, 'versions.json');
-//     mkdirp(root);
-//     jsonfile.writeFileSync(fname, versions);
-// };
 
 var parseVersion = function(s) {
     return s.split('-')[0].split('.').map((d) => parseInt(d));
