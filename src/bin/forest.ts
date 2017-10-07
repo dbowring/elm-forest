@@ -19,7 +19,6 @@ If in the future these shadow any elm commands, use `--` to call them
 */
 
 
-import * as parseArgs from 'minimist'
 import * as forest from '../lib/forest';
 import * as AsciiTable from 'ascii-table';
 

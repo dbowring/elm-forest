@@ -1,6 +1,22 @@
 #!/usr/bin/env node
 'use strict';
 Object.defineProperty(exports, "__esModule", { value: true });
+/**
+Elm Forest CLI
+
+Commands:
+  - init: initalize an elm project
+  - get: pre-install a specific elm version
+  - list: list available elm versions
+  - remove: uninstall a specific elm version
+  - npm: alias to local npm, so you can, .e.g., `forest npm install elm-oracle`
+
+Everything else gets passed to the appropriate elm platform
+    E.g., `forest reactor`, `forest npm install elm-format; forest format`
+If in the future these shadow any elm commands, use `--` to call them
+    E.g. `forest -- init` will become `elm init`
+
+*/
 const forest = require("../lib/forest");
 const AsciiTable = require("ascii-table");
 var subcommands = ['init', 'list', 'remove'];
