@@ -36,6 +36,8 @@ var ELM_NPM_URL: string = "https://registry.npmjs.org/elm";
  */
 var VERSION_PATTERN = /^(?:(\d)+(?:(?:\.)(\d+)(?:(?:\.)(\d+))?)?)(?:-([^\d]+)(\d+)?)?$/
 
+export var VERSION =require('../package.json').version;
+
 /* ****************************************************************************
  *  Public API
  */
@@ -63,7 +65,8 @@ export enum Errors {
     NpmBinFailed,
     NpmRunFailed,
     CantExpandVersion,
-    NpmCommandFailed
+    NpmCommandFailed,
+    ElmCommandFailed
 };
 
 export let ForestError = function(name: Errors, message: string, code?: number): void {
@@ -374,13 +377,17 @@ export let runIn = function(version: string, args: string[]): Promise<number> {
                 child.stderr.pipe(process.stderr);
                 process.stdin.pipe(child.stdin);
                 process.stdin.resume();
-                child.on('close', (code) => {
+                child.on('close', (code: number) => {
                     process.stdin.pause();
                     process.stdin.unpipe();
                     if (code === 0) {
                         resolve(code)
                     } else {
-                        reject(code); // TODO: wrap?
+                        reject(new ForestError(
+                            Errors.ElmCommandFailed,
+                            `elm command failed with exit code ${code}`,
+                            code
+                        ));
                     }
                 });
             });

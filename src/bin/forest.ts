@@ -19,11 +19,9 @@ If in the future these shadow any elm commands, use `--` to call them
 */
 
 
-import * as forest from '../lib/forest';
-import * as AsciiTable from 'ascii-table';
+import * as forest from '../lib/forest'
+import * as AsciiTable from 'ascii-table'
 
-
-var subcommands: string[] = ['init', 'list', 'remove'];
 
 var parser = function() {
     let args: string[] = process.argv.slice(2);
@@ -70,15 +68,13 @@ var parser = function() {
             });
 
     } else if (subcommand === '--' || subcommand === 'elm') {
-        forest.runInBest(process.cwd(), args.slice(1))
-            .then((code) => process.exit(code))
-            .catch((err) => {
-                console.error('Call to elm failed: ' + err);
-            });
+        passCmd(args.slice(1));
 
+    } else if (subcommand === '--version') {
+        console.log('forest', forest.VERSION);
+        console.log(`Check elm version using \`forest elm --version\``);
     } else {
-        forest.runInBest(process.cwd(), args)
-            .then((code) => process.exit(code));
+        passCmd(args);
     }
 };
 
@@ -101,15 +97,20 @@ var helpCmd = function() {
     console.log(
         `forest : Elm version manager and proxy
     Subcommands:
-        init [version] - initialize new elm project
-        use [version] - change project to specified version
-        list - list available elm versions
-        remove <version> - uninstall given elm version
+        \`init [version]\` - initialize new elm project (defaults to latest)
+        \`get [version]\` - pre-install a specific elm version (defaults to latest)
+        \`list\` - list available elm versions
+        \`remove <version>\` - uninstall given elm version
+        \`elm [arg [...]]\` - pass arguments to elm platform
+        \`npm [arg [...]]\` - pass arguments to npm used to install current elm
+        \`--\` [arg [...]] - alias to subcommand \`elm\`
+
+    use \`--version\` to show forest version
 
     Give no arguments or '--help' to show this message.
 
     Anything else will be given the the project-appropriate version of
-      elm-platform
+      elm-platform. (as if you had used the subcommad \`elm\`)
 
 `);
 };
@@ -161,8 +162,8 @@ var listCmd = function(args: string[]) {
         process.exit(1);
     };
     forest.getElmVersions()
-        .then(success)
-        .catch(fail);
+        .catch(fail)
+        .then(success);
 };
 
 var initCmd = function(args: string[]) {
@@ -180,6 +181,13 @@ var initCmd = function(args: string[]) {
                 return forest.ensureInstalled(latest);
             }).then((version) => {
                 return doInit(version);
+            }).catch((err) => {
+                if (err.name && err.message && err.code) {
+                    console.error(err.message);
+                    process.exit(err.code);
+                } else {
+                    process.exit(1);
+                }
             });
     } else {
         doInit(version);
@@ -218,6 +226,20 @@ var removeCmd = function(args: string[]) {
         .then(() => {
             console.log('Removed Elm ', version);
         });
+};
+
+
+var passCmd = function(args: string[]) {
+    forest.runInBest(process.cwd(), args)
+        .catch((err) => {
+            if (err.name === forest.Errors.ElmCommandFailed) {
+                console.error(err.message);
+                process.exit(err.code);
+            } else {
+                console.error('Unknown Error', err);
+                process.exit(1);
+            }
+        }).then((code: number) => process.exit(code))
 };
 
 
