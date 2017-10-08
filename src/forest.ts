@@ -104,7 +104,7 @@ module ForestInternal {
             this.path = path;
         }
 
-        queryConstraints = function(): Promise<VersionConstraint> {
+        queryConstraints = function(this: ElmPackage): Promise<VersionConstraint> {
             let self = this;
             let promiseFn = function(
                 resolve: (y: VersionConstraint) => any,
@@ -149,9 +149,11 @@ module ForestInternal {
         }
 
         match(version: ExpandedVersion) {
-            let against = parseVersionString(version.expanded);
+            if (version.parsed === null) {
+                return false;
+            }
             for (let check of this.constraints) {
-                if (!check(against)) {
+                if (!check(version.parsed)) {
                     return false;
                 }
             }
@@ -165,11 +167,12 @@ module ForestInternal {
     export class ExpandedVersion {
         expanded: string;
         unexpended: string;
-        parsed: ParsedVersion;
+        parsed: ParsedVersion | null;
 
         constructor(expanded: string, unexpanded?: string) {
             this.expanded = expanded;
             this.unexpended = unexpanded || expanded;
+            // TODO: Should do something if this is null
             this.parsed = parseVersionString(expanded);
         }
 
@@ -306,7 +309,7 @@ module ForestInternal {
         }
 
         let dotted = version + '.';
-        let dottedMatch = null;
+        let dottedMatch: ExpandedVersion | null = null;
         for (let item of pool) {
             if (item.expanded === version) {
                 return new ExpandedVersion(version);
@@ -795,7 +798,12 @@ export module Forest {
     export type ExpandedVersion = ForestInternal.ExpandedVersion;
     export type ElmPackage = ForestInternal.ElmPackage;
     export type VersionConstraint = ForestInternal.VersionConstraint;
+    export type ForestError = ForestInternal.ForestError;
+    export type Errors = ForestInternal.Errors;
 
+    export let ExpandedVersion = ForestInternal.ExpandedVersion;
+    export let ElmPackage = ForestInternal.ElmPackage;
+    export let VersionConstraint = ForestInternal.VersionConstraint;
     export let ForestError = ForestInternal.ForestError;
     export let Errors = ForestInternal.Errors;
 
@@ -877,7 +885,15 @@ export module Forest {
                             return tryOnline(info)
                         } else {
                             return new Promise<ExpandedVersion>((resolve, reject) => {
-                                resolve(version);
+                                if (version === null) {
+                                    throw new ForestError(
+                                        Errors.NoMatchingVersion,
+                                        'Unable to find a suitable elm version'
+                                    );
+                                } else {
+                                    resolve(version);
+                                }
+
                             });
                         }
                     });
@@ -985,17 +1001,20 @@ export module Forest {
         getVersionList()
             .then((versions) => {
                 // TODO: Consider exposing findSuitable
-                let version = findSuitable(want, versions);
+                let version : ExpandedVersion | null = findSuitable(want, versions);
                 if (version === null) {
                     throw new ForestError(
                         Errors.NoMatchingVersion,
                         `can't find an installable version for version ${want}`
                     );
+                } else {
+                    // Typescript wont accept that version can't be null here...
+                    let typescriptFix : ExpandedVersion = version;
+                    return install(typescriptFix, true)
+                        .then(() => {
+                            console.log('Installed Elm', typescriptFix.expanded);
+                        });
                 }
-                return install(version, true)
-                    .then(() => {
-                        console.log('Installed Elm', version.expanded);
-                    });
             }).catch(_cliCatch);
     };
 
