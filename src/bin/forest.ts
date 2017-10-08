@@ -42,6 +42,9 @@ var parser = function() {
     } else if (subcommand === 'remove') {
         removeCmd(args.slice(1));
 
+    } else if (subcommand === 'current') {
+        currentCmd(args.slice(1));
+
     } else if (subcommand === 'npm') {
         forest.findLocalPackage()
             .catch((err) => {
@@ -100,6 +103,7 @@ var helpCmd = function() {
         \`init [version]\` - initialize new elm project (defaults to latest)
         \`get [version]\` - pre-install a specific elm version (defaults to latest)
         \`list\` - list available elm versions
+        \`current\` - show the elm version that would be used here
         \`remove <version>\` - uninstall given elm version
         \`elm [arg [...]]\` - pass arguments to elm platform
         \`npm [arg [...]]\` - pass arguments to npm used to install current elm
@@ -225,6 +229,32 @@ var removeCmd = function(args: string[]) {
     forest.removeElmVersion(version)
         .then(() => {
             console.log('Removed Elm ', version);
+        });
+};
+
+var currentCmd = function(args: string[]) {
+    forest.findLocalPackage()
+        .catch((err) => {
+            if (err.name === forest.Errors.NoElmProject) {
+                console.error(err.message);
+                process.exit(err.name);
+            }
+            console.error("Unknown error");
+            console.error(err);
+            process.exit(err.code || 1);
+
+        }).then((packagePath: string) => {
+            return forest.packageBestVersion(packagePath);
+        }).catch((err) => {
+            if (err.name === forest.Errors.NoElmVersions) {
+                console.log(err.message);
+                process.exit(err.code);
+            }
+            console.error("Unknown error");
+            console.error(err);
+            process.exit(err.code || 1);
+        }).then((best: string) => {
+            console.log(best);
         });
 };
 

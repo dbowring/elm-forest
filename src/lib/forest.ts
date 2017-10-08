@@ -38,6 +38,7 @@ var VERSION_PATTERN = /^(?:(\d)+(?:(?:\.)(\d+)(?:(?:\.)(\d+))?)?)(?:-([^\d]+)(\d
 
 export var VERSION =require('../package.json').version;
 
+
 /* ****************************************************************************
  *  Public API
  */
@@ -437,20 +438,14 @@ export let runNpmCommand = function(version: string, args: string[], pipe: boole
 export let findBestVersion = function(constraints) {
     // Check local cache, then remote
     return new Promise<string>((resolve, reject) => {
-        readVersionCache()
-            .then((versions: string[]) => {
-                return selectBestVersion(versions, constraints);
-            })
-            .then((best: string) => {
-                return resolve(best);
-            })
-            .catch(() => {
+        return readVersionCache()
+            .catch((err) => {
+                console.log
                 return getElmVersions()
-                    .then((versions: string[]) => {
-                        return selectBestVersion(versions, constraints);
-                    }).then((best: string) => {
-                        return resolve(best);
-                    })
+            }).then((versions: string[]) => {
+                return selectBestVersion(versions, constraints);
+            }).then((best: string) => {
+                return resolve(best);
             })
     });
 }
@@ -597,11 +592,12 @@ let writeVersionCache = function(versions: string[]): Promise<string[]> {
 
     let promiseFn = function(
         resolve: (x: string[]) => any,
-        reject: (x: Error, y: string) => any
+        reject: (x: Error) => any
     ) {
         jsonfile.writeFile(fname, versions, (err) => {
             if (err) {
-                throw new ForestError(Errors.VersionCacheWriteFail, err);
+                // In callback, must use reject
+                reject(new ForestError(Errors.VersionCacheWriteFail, err));
             } else {
                 resolve(versions);
             }
@@ -619,11 +615,12 @@ let readVersionCache = function(): Promise<string[]> {
 
     let promiseFn = function(
         resolve: (x: string[]) => any,
-        reject: (x: Error, y: string) => any
+        reject: (x: Error) => any
     ) {
         jsonfile.readFile(fname, (err, object) => {
             if (err) {
-                throw new ForestError(Errors.VersionCacheReadFail, err);
+                // In callback, must use reject
+                reject(new ForestError(Errors.VersionCacheReadFail, err));
             } else {
                 resolve(object);  // TODO: enforce typing
             }

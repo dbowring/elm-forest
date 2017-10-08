@@ -19,8 +19,6 @@ If in the future these shadow any elm commands, use `--` to call them
 */
 const forest = require("../lib/forest");
 const AsciiTable = require("ascii-table");
-console.log(process);
-var called = process.argv[1] || 'forest';
 var parser = function () {
     let args = process.argv.slice(2);
     let subcommand = args[0];
@@ -38,6 +36,9 @@ var parser = function () {
     }
     else if (subcommand === 'remove') {
         removeCmd(args.slice(1));
+    }
+    else if (subcommand === 'current') {
+        currentCmd(args.slice(1));
     }
     else if (subcommand === 'npm') {
         forest.findLocalPackage()
@@ -70,7 +71,7 @@ var parser = function () {
     }
     else if (subcommand === '--version') {
         console.log('forest', forest.VERSION);
-        console.log(`Check elm version using \`${called} elm --version\``);
+        console.log(`Check elm version using \`forest elm --version\``);
     }
     else {
         passCmd(args);
@@ -94,6 +95,7 @@ var helpCmd = function () {
         \`init [version]\` - initialize new elm project (defaults to latest)
         \`get [version]\` - pre-install a specific elm version (defaults to latest)
         \`list\` - list available elm versions
+        \`current\` - show the elm version that would be used here
         \`remove <version>\` - uninstall given elm version
         \`elm [arg [...]]\` - pass arguments to elm platform
         \`npm [arg [...]]\` - pass arguments to npm used to install current elm
@@ -214,6 +216,30 @@ var removeCmd = function (args) {
     forest.removeElmVersion(version)
         .then(() => {
         console.log('Removed Elm ', version);
+    });
+};
+var currentCmd = function (args) {
+    forest.findLocalPackage()
+        .catch((err) => {
+        if (err.name === forest.Errors.NoElmProject) {
+            console.error(err.message);
+            process.exit(err.name);
+        }
+        console.error("Unknown error");
+        console.error(err);
+        process.exit(err.code || 1);
+    }).then((packagePath) => {
+        return forest.packageBestVersion(packagePath);
+    }).catch((err) => {
+        if (err.name === forest.Errors.NoElmVersions) {
+            console.log(err.message);
+            process.exit(err.code);
+        }
+        console.error("Unknown error");
+        console.error(err);
+        process.exit(err.code || 1);
+    }).then((best) => {
+        console.log(best);
     });
 };
 var passCmd = function (args) {
