@@ -160,30 +160,10 @@ var listCmd = function (args) {
 };
 var initCmd = function (args) {
     let version = args[0] || 'latest';
-    let doInit = function (version) {
-        return forest.runIn(version, ['package', 'install', 'elm-lang/core'])
-            .then((code) => process.exit(code));
-    };
-    if (version === 'latest') {
-        forest.getElmVersions()
-            .then((versions) => {
-            let latest = versions.shift();
-            return forest.ensureInstalled(latest);
-        }).then((version) => {
-            return doInit(version);
-        }).catch((err) => {
-            if (err.name && err.message && err.code) {
-                console.error(err.message);
-                process.exit(err.code);
-            }
-            else {
-                process.exit(1);
-            }
-        });
-    }
-    else {
-        doInit(version);
-    }
+    return forest.expandVersion(version)
+        .then((fullVersion) => {
+        return forest.runIn(fullVersion, ['package', 'install', 'elm-lang/core']).then((code) => process.exit(code));
+    });
 };
 var installCmd = function (args) {
     if (args.length <= 1) {

@@ -190,57 +190,6 @@ export let expandVersion = function(version: string): Promise<string> {
  *   that this version was already installed)
  */
 export let installVersion = function(version: string): Promise<[string, boolean]> {
-    let doInstall = function(version) {
-        return mkdirp(elmRoot(version))
-            .then(function() {
-                say('Preparing enviroment for', version);
-                return runNpmCommand(version, ['init', '-y'], false)
-                    .catch((err) => {
-                        throw new ForestError(Errors.NpmInitFailed, "npm init failed");
-                    });
-            }).then((_) => {
-                say('Installing...');
-                let ver = 'elm@' + version;
-                return runNpmCommand(version, ['install', '--save', ver], false)
-                    .catch((err) => {
-                        throw new ForestError(Errors.NpmElmInstallFailed, `\`npm install ${ver}\` failed`);
-                    });
-            }).then((_) => {
-                say('Finalizing...');
-                return runNpmCommand(version, ['bin'], false)
-                    .catch((err) => {
-                        throw new ForestError(Errors.NpmBinFailed, "failed to bind elm binary");
-                    });
-            }).then((binaryDir) => {
-                let cachePath = path.join(elmRoot(version), 'binpath.log');
-                let options = { mode: 0o664 };
-                let promiseFn = function(
-                    resolve: (x: [string, boolean]) => any,
-                    reject: (x: Error) => any
-                ) {
-                    fs.writeFile(cachePath, binaryDir, options, (err) => {
-                        if (err) {
-                            throw new ForestError(Errors.BinPathWriteFailed, err.message);
-                        } else {
-                            resolve([version, true]);
-                        }
-                    });
-                };
-                return new Promise<[string, boolean]>(promiseFn);
-            }).catch((err) => {
-                if (isElmInstalled(version)) {
-                    say('Installation failed, Cleaning up...');
-                    return removeElmVersion(version)
-                        .then(() => {
-                            say('Finished cleaning up');
-                            throw err;
-                        });
-                } else {
-                    throw err;
-                }
-            });
-    };
-
     return expandVersion(version)
         .then((fullVersion) => {
 
@@ -320,7 +269,7 @@ export let ensureInstalled = function(version: string): Promise<string> {
             return resolve(version);
         }
         say('Need to install Elm', version);
-        return installVersion(version)
+        return doInstall(version)
             .then((_) => resolve(version))
     });
 }
@@ -456,6 +405,61 @@ export let findBestVersion = function(constraints) {
 var say = function(...args: any[]): void {
     var prefix: any[] = ['FOREST:']
     console.log.apply(console, prefix.concat(args));
+};
+
+/* ****************************************************************************
+*  Perform an installation for a specific elm version
+*  `version` must already be full expanded (e.g., from "0.17" -> "0.17.1")
+*/
+let doInstall = function(version: string) {
+    return mkdirp(elmRoot(version))
+        .then(function() {
+            say('Preparing enviroment for', version);
+            return runNpmCommand(version, ['init', '-y'], false)
+                .catch((err) => {
+                    throw new ForestError(Errors.NpmInitFailed, "npm init failed");
+                });
+        }).then((_) => {
+            say('Installing...');
+            let ver = 'elm@' + version;
+            return runNpmCommand(version, ['install', '--save', ver], false)
+                .catch((err) => {
+                    throw new ForestError(Errors.NpmElmInstallFailed, `\`npm install ${ver}\` failed`);
+                });
+        }).then((_) => {
+            say('Finalizing...');
+            return runNpmCommand(version, ['bin'], false)
+                .catch((err) => {
+                    throw new ForestError(Errors.NpmBinFailed, "failed to bind elm binary");
+                });
+        }).then((binaryDir) => {
+            let cachePath = path.join(elmRoot(version), 'binpath.log');
+            let options = { mode: 0o664 };
+            let promiseFn = function(
+                resolve: (x: [string, boolean]) => any,
+                reject: (x: Error) => any
+            ) {
+                fs.writeFile(cachePath, binaryDir, options, (err) => {
+                    if (err) {
+                        throw new ForestError(Errors.BinPathWriteFailed, err.message);
+                    } else {
+                        resolve([version, true]);
+                    }
+                });
+            };
+            return new Promise<[string, boolean]>(promiseFn);
+        }).catch((err) => {
+            if (isElmInstalled(version)) {
+                say('Installation failed, Cleaning up...');
+                return removeElmVersion(version)
+                    .then(() => {
+                        say('Finished cleaning up');
+                        throw err;
+                    });
+            } else {
+                throw err;
+            }
+        });
 };
 
 /* ****************************************************************************
