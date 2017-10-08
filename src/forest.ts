@@ -550,7 +550,7 @@ module ForestInternal {
         return mkdirp(elmRoot(version))
             .then(function() {
                 if (verbose) {
-                    console.log('Preparing enviroment for', version.expanded);
+                    console.log('FOREST: Preparing enviroment for', version.expanded);
                 }
                 return runNpmCommand(version.expanded, ['init', '-y'], false)
                     .catch((err) => {
@@ -558,7 +558,7 @@ module ForestInternal {
                     });
             }).then((_) => {
                 if (verbose) {
-                    console.log('Installing...');
+                    console.log('FOREST: Installing...');
                 }
                 return runNpmCommand(version.expanded, ['install', '--save', version.forNpm()], false)
                     .catch((err) => {
@@ -566,7 +566,7 @@ module ForestInternal {
                     });
             }).then((_) => {
                 if (verbose) {
-                    console.log('Finalizing...');
+                    console.log('FOREST: Finalizing...');
                 }
                 return runNpmCommand(version.expanded, ['bin'], false)
                     .catch((err) => {
@@ -591,12 +591,12 @@ module ForestInternal {
             }).catch((err) => {
                 if (isElmInstalled(version)) {
                     if (verbose) {
-                        console.log('Installation failed, Cleaning up...');
+                        console.log('FOREST: Installation failed, Cleaning up...');
                     }
                     return removeElmVersion(version.expanded)
                         .then(() => {
                             if (verbose) {
-                                console.log('Finished cleaning up');
+                                console.log('FOREST: Finished cleaning up');
                             }
                             throw err;
                         });
@@ -688,7 +688,7 @@ module ForestInternal {
     };
 
     export let runNpmCommandIn = function(version: ExpandedVersion, args: string[], pipe: boolean): Promise<string> {
-        return ensureInstalled(version)
+        return ensureInstalled(version, true)
             .then((_) => {
                 return runNpmCommand(version.expanded, args, pipe);
             });
@@ -739,7 +739,7 @@ module ForestInternal {
     *  Get the result of `npm bin` in the container for a specific elm version
     */
     export let runIn = function(version: ExpandedVersion, args: string[]): Promise<number> {
-        return ensureInstalled(version)
+        return ensureInstalled(version, true)
             .then((_) => {
                 return environSpawn(version, 'elm', args)
             }).then((child) => {
@@ -765,17 +765,21 @@ module ForestInternal {
             });
     };
 
-    export let ensureInstalled = function(version: ExpandedVersion): Promise<ExpandedVersion> {
+    export let ensureInstalled = function(version: ExpandedVersion, verbose?: boolean): Promise<ExpandedVersion> {
         return new Promise<ExpandedVersion>((resolve, reject) => {
             if (isElmInstalled(version)) {
                 resolve(version);
                 return;
             }
-            console.log('FOREST: Need to install Elm', version.expanded);
-            return install(version)
+            if (verbose) {
+                console.log('FOREST: Need to install Elm', version.expanded);
+            }
+            return install(version, verbose)
                 .then((_) => {
-                    console.log('FOREST: Finished installing Elm', version.expanded);
-                    resolve(version)
+                    if (verbose) {
+                        console.log('FOREST: Finished installing Elm', version.expanded);
+                    }
+                    resolve(version);
                 })
         });
     }
