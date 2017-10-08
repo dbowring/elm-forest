@@ -657,13 +657,15 @@ module ForestInternal {
             reject: (err: any) => any
         ) {
             fs.stat(root, (err: any, stats: fs.Stats) => {
-                if (err.code === 'ENOENT') {
-                    resolve(false);
-                } else if (err) {
-                    reject(new ForestError(
-                        Errors.IOError,
-                        `Error stating elm directory at ${root}; ${err}`
-                    ));
+                if (err) {
+                    if (err.code === 'ENOENT') {
+                        resolve(false);
+                    } else {
+                        reject(new ForestError(
+                            Errors.IOError,
+                            `Error stating elm directory at ${root}; ${err}`
+                        ));
+                    }
                 } else {
                     resolve(stats.isDirectory());
                 }
@@ -1088,11 +1090,24 @@ export module Forest {
     let cliList = function(args: string[]): void {
         getVersionList()
             .then((versions) => {
-                console.log('Available Elm Versions (* = installed)');
-                for (let version of versions) {
-                    let installed = isInstalled(version) ? '*' : ' ';
-                    console.log(`  ${installed} ${version.expanded}`);
-                }
+                
+                let toMessage = function(version: ExpandedVersion) {
+                    return isInstalled(version)
+                        .then((installed) => {
+                            let check = installed ? '*' : ' ';
+                            return `  ${check} ${version.expanded}`;
+                        });
+                };
+
+                let messagePromises = versions.map(toMessage);
+                Promise.all(messagePromises)
+                    .then((messages) => {
+                        console.log('Available Elm Versions (* = installed)');
+                        for (let message of messages) {
+                            console.log(message);
+                        }
+                    });
+                
             }).catch(_cliCatch);
     };
 
