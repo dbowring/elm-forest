@@ -1,13 +1,13 @@
 {
   "name": "elm-forest",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Elm version manager and proxy",
   "main": "lib/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "tsc": "tsc",
     "tsfmt": "tsfmt",
-    "build": "tsc --project src/bin/"
+    "build": "tsc --project src/"
   },
   "author": {
     "name": "Daniel Bowring",
@@ -15,22 +15,18 @@
     "url": "https://danielb.codes"
   },
   "repository": "https://github.com/dbowring/elm-forest",
-  "files": [
-    "lib",
-    "bin"
-  ],
+  "files": [ "lib" ],
   "bin": {
-    "forest": "bin/forest.js"
+    "forest": "lib/forest.js"
   },
   "license": "BSD-3-Clause",
   "dependencies": {
-    "ascii-table": "0.0.9",
     "expand-home-dir": "0.0.3",
     "isdir": "^2.0.1",
     "jsonfile": "^4.0.0",
     "mkdirp-promise": "^5.0.1",
     "npm-registry-client": "^8.5.0",
-    "rm-r": "^1.0.2"
+    "rimraf": "^2.6.2"
   },
   "devDependencies": {
     "@types/node": "^8.0.32",
