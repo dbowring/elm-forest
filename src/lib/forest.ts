@@ -176,7 +176,7 @@ export let expandVersion = function(version: string): Promise<string> {
         })
     };
 
-    console.log('Resolving', version, '...');
+    say('Resolving', version, '...');
     return getElmVersions()
         .then((versions) => {
             return findPromise(versions);
@@ -193,20 +193,20 @@ export let installVersion = function(version: string): Promise<[string, boolean]
     let doInstall = function(version) {
         return mkdirp(elmRoot(version))
             .then(function() {
-                console.log('Preparing enviroment for', version);
+                say('Preparing enviroment for', version);
                 return runNpmCommand(version, ['init', '-y'], false)
                     .catch((err) => {
                         throw new ForestError(Errors.NpmInitFailed, "npm init failed");
                     });
             }).then((_) => {
-                console.log('Installing...');
+                say('Installing...');
                 let ver = 'elm@' + version;
                 return runNpmCommand(version, ['install', '--save', ver], false)
                     .catch((err) => {
                         throw new ForestError(Errors.NpmElmInstallFailed, `\`npm install ${ver}\` failed`);
                     });
             }).then((_) => {
-                console.log('Finalizing...');
+                say('Finalizing...');
                 return runNpmCommand(version, ['bin'], false)
                     .catch((err) => {
                         throw new ForestError(Errors.NpmBinFailed, "failed to bind elm binary");
@@ -229,10 +229,10 @@ export let installVersion = function(version: string): Promise<[string, boolean]
                 return new Promise<[string, boolean]>(promiseFn);
             }).catch((err) => {
                 if (isElmInstalled(version)) {
-                    console.log('Installation failed, Cleaning up...');
+                    say('Installation failed, Cleaning up...');
                     return removeElmVersion(version)
                         .then(() => {
-                            console.log('Finished cleaning up');
+                            say('Finished cleaning up');
                             throw err;
                         });
                 } else {
@@ -319,7 +319,7 @@ export let ensureInstalled = function(version: string): Promise<string> {
         if (isElmInstalled(version)) {
             return resolve(version);
         }
-        console.log('Need to install Elm', version);
+        say('Need to install Elm', version);
         return installVersion(version)
             .then((_) => resolve(version))
     });
@@ -440,7 +440,6 @@ export let findBestVersion = function(constraints) {
     return new Promise<string>((resolve, reject) => {
         return readVersionCache()
             .catch((err) => {
-                console.log
                 return getElmVersions()
             }).then((versions: string[]) => {
                 return selectBestVersion(versions, constraints);
@@ -454,6 +453,10 @@ export let findBestVersion = function(constraints) {
 *  Internal API
 */
 
+var say = function(...args: any[]): void {
+    var prefix: any[] = ['FOREST:']
+    console.log.apply(console, prefix.concat(args));
+};
 
 /* ****************************************************************************
 *  Parse a release stage into a number
