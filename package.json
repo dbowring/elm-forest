@@ -1,6 +1,6 @@
 {
   "name": "elm-forest",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Elm version manager and proxy",
   "main": "lib/index.js",
   "scripts": {
@@ -15,14 +15,15 @@
     "url": "https://danielb.codes"
   },
   "repository": "https://github.com/dbowring/elm-forest",
-  "files": [ "lib" ],
+  "files": [
+    "lib"
+  ],
   "bin": {
     "forest": "lib/forest.js"
   },
   "license": "BSD-3-Clause",
   "dependencies": {
     "expand-home-dir": "0.0.3",
-    "isdir": "^2.0.1",
     "jsonfile": "^4.0.0",
     "mkdirp-promise": "^5.0.1",
     "npm-registry-client": "^8.5.0",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^8.0.32",
+    "@types/rimraf": "^2.0.2",
     "typescript": "^2.5.3",
     "typescript-formatter": "^6.0.0"
   }

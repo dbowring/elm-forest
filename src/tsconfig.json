@@ -6,8 +6,10 @@
         "noImplicitReturns": true,
         "noUnusedLocals": true,
         "noImplicitThis": true,
+        //"noImplicitAny": true,
         "alwaysStrict": true,
-        "strictNullChecks": true
+        "strictNullChecks": true,
+        //"declaration": true
     },
     "files": ["forest.ts"]
 }

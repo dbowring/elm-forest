@@ -6,27 +6,31 @@ import * as npmlog from 'npmlog'
 import * as expandHomeDir from 'expand-home-dir'
 import * as path from 'path'
 import * as fs from 'fs'
-import * as isdir from 'isdir'
 import * as mkdirp from 'mkdirp-promise'
 import * as jsonfile from 'jsonfile'
 import { spawn } from 'child_process'
 import * as rimraf from 'rimraf'
+
+
 
 /**
  * Blacklisted versions cannot be installed, because
  *   - `0.0.0`: Placeholder version, not installable
  */
 var BLACKLISTED_VERSIONS: string[] = ['0.0.0'];
+
 /**
  * First supported version. Versions before this will always be ignored
  */
 var FIRST_VERSION: string = '0.15.1-alpha';
+
 /**
  * Location to store data. May contain:
  *   - `versions.json`: cache of available elm versions
  *   - `<elm-version>/`: Installation of specific elm version
  */
 var ROOT: string = '~/.elm-forest/';
+
 /**
  * URL used to query elm information from NPM
  */
@@ -37,9 +41,13 @@ var ELM_NPM_URL: string = "https://registry.npmjs.org/elm";
  * <major>[.minor[.patch[-testStage[stageIncrementor]]]]
  * E.g., "0", "0.17", "0.17.1", "0.18.0-beta", "0.17.0-alpha2"
  */
-var VERSION_PATTERN = /^(?:(\d)+(?:(?:\.)(\d+)(?:(?:\.)(\d+))?)?)(?:-([^\d]+)(\d+)?)?$/
+var VERSION_PATTERN: RegExp
+    = /^(?:(\d)+(?:(?:\.)(\d+)(?:(?:\.)(\d+))?)?)(?:-([^\d]+)(\d+)?)?$/
 
-export var VERSION = require('../package.json').version;
+/**
+ * Forest Version
+ */
+var FOREST_VERSION: string = require('../package.json').version;
 
 
 /**
@@ -75,6 +83,7 @@ module ForestInternal {
         // New Errors
         VersionNoExactMatch,
         RemovalFailed,
+        IOError,
     };
 
     export class ForestError {
@@ -110,7 +119,7 @@ module ForestInternal {
                 resolve: (y: VersionConstraint) => any,
                 reject: (x: any) => any
             ) {
-                jsonfile.readFile(self.path, (err, object) => {
+                jsonfile.readFile(self.path, (err: any, object: { 'elm-version'?: any }) => {
                     if (err) {
                         throw new ForestError(
                             Errors.BadElmPackage,
@@ -123,6 +132,13 @@ module ForestInternal {
                         throw new ForestError(
                             Errors.NoVersionConstraint,
                             'elm-package is missing `elm-version` key'
+                        );
+                    }
+
+                    if (typeof versionLimit !== 'string') {
+                        throw new ForestError(
+                            Errors.ParseConstraintFailed,
+                            'expecting `elm-version` to be a string'
                         );
                     }
 
@@ -233,23 +249,35 @@ module ForestInternal {
         let firstMatch = constraint.match(first);
         let secondMatch = constraint.match(second);
 
-        let firstOp = {
-            '<': (a) => (v) => a < v,
-            '<=': (a) => (v) => a <= v,
-            '>': (a) => (v) => a > v,
-            '>=': (a) => (v) => a >= v,
+        interface OpDict<ValueType> {
+            [key: string]: ValueType
         };
-        let secondOp = {
-            '<': (a) => (v) => v < a,
-            '<=': (a) => (v) => v <= a,
-            '>': (a) => (v) => v > a,
-            '>=': (a) => (v) => v >= a,
+
+        type CurryOp = (a: ParsedVersion) => (v: ParsedVersion) => boolean;
+        type Opd = OpDict<CurryOp>;
+
+        let alwaysFail = (v: ParsedVersion) => false;
+
+        let firstOp: Opd = {
+            '<': (a: ParsedVersion) => (v: ParsedVersion) => a < v,
+            '<=': (a: ParsedVersion) => (v: ParsedVersion) => a <= v,
+            '>': (a: ParsedVersion) => (v: ParsedVersion) => a > v,
+            '>=': (a: ParsedVersion) => (v: ParsedVersion) => a >= v,
+        };
+        let secondOp: Opd = {
+            '<': (a: ParsedVersion) => (v: ParsedVersion) => v < a,
+            '<=': (a: ParsedVersion) => (v: ParsedVersion) => v <= a,
+            '>': (a: ParsedVersion) => (v: ParsedVersion) => v > a,
+            '>=': (a: ParsedVersion) => (v: ParsedVersion) => v >= a,
         };
 
         if (firstMatch && secondMatch) {
+            let firstVersion = parseVersionString(firstMatch[1]);
+            let secondVersion = parseVersionString(secondMatch[2]);
+
             return [
-                firstOp[firstMatch[2]](parseVersionString(firstMatch[1])),
-                secondOp[secondMatch[1]](parseVersionString(secondMatch[2]))
+                firstVersion ? firstOp[firstMatch[2]](firstVersion) : alwaysFail,
+                secondVersion ? secondOp[secondMatch[1]](secondVersion) : alwaysFail
             ]
         }
 
@@ -394,7 +422,7 @@ module ForestInternal {
             let client = getQuietNpmClient();
             let params = { timeout: 1000 };
 
-            client.get(ELM_NPM_URL, params, (error, data, raw, res) => {
+            client.get(ELM_NPM_URL, params, (error: any, data: { versions?: any }/*, raw, res*/) => {
                 if (error) {
                     throw new ForestError(Errors.NpmCommunicationError, error);
                 }
@@ -432,7 +460,7 @@ module ForestInternal {
             resolve: (x: ExpandedVersion[]) => any,
             reject: (err: any) => any
         ) {
-            jsonfile.writeFile(versionCache, unpacked, (err, object) => {
+            jsonfile.writeFile(versionCache, unpacked, (err: any) => {
                 if (err) {
                     // In callback, must use reject
                     reject(new ForestError(Errors.VersionCacheWriteFail, err));
@@ -454,16 +482,19 @@ module ForestInternal {
      */
     export let queryVersionCache = function(): Promise<ExpandedVersion[]> {
         let stringify = function(arr: any[]): string[] {
-            let isString = (s) => (typeof s) == 'string';
+            let isString = (s: any) => (typeof s) == 'string';
             return arr.filter(isString);
         };
 
-        let promote = function(version) {
+        let promote = function(version: string) {
             return new ExpandedVersion(version);
         };
 
-        var promiseFn = function(resolve, reject) {
-            jsonfile.readFile(versionCache, (err, object) => {
+        var promiseFn = function(
+            resolve: (x: ExpandedVersion[]) => any,
+            reject: (x: ForestError) => any
+        ) {
+            jsonfile.readFile(versionCache, (err: any, object: any) => {
                 if (err) {
                     // In callback, must use reject
                     reject(new ForestError(Errors.VersionCacheReadFail, err));
@@ -559,7 +590,7 @@ module ForestInternal {
                     .catch((err) => {
                         throw new ForestError(Errors.NpmInitFailed, "npm init failed");
                     });
-            }).then((_) => {
+            }).then(() => {
                 if (verbose) {
                     console.log('FOREST: Installing...');
                 }
@@ -567,7 +598,7 @@ module ForestInternal {
                     .catch((err) => {
                         throw new ForestError(Errors.NpmElmInstallFailed, `\`npm install ${version.forNpm()}\` failed`);
                     });
-            }).then((_) => {
+            }).then(() => {
                 if (verbose) {
                     console.log('FOREST: Finalizing...');
                 }
@@ -575,7 +606,7 @@ module ForestInternal {
                     .catch((err) => {
                         throw new ForestError(Errors.NpmBinFailed, "failed to bind elm binary");
                     });
-            }).then((binaryDir) => {
+            }).then((binaryDir: string) => {
                 let cachePath = path.join(elmRoot(version), 'binpath.log');
                 let options = { mode: 0o664 };
                 let promiseFn = function(
@@ -591,21 +622,25 @@ module ForestInternal {
                     });
                 };
                 return new Promise<[ExpandedVersion, boolean]>(promiseFn);
-            }).catch((err) => {
-                if (isElmInstalled(version)) {
-                    if (verbose) {
-                        console.log('FOREST: Installation failed, Cleaning up...');
-                    }
-                    return removeElmVersion(version.expanded)
-                        .then(() => {
+            }).catch((err: any) => {
+
+                return isElmInstalled(version)
+                    .then((installed) => {
+                        if (installed) {
                             if (verbose) {
-                                console.log('FOREST: Finished cleaning up');
+                                console.log('FOREST: Installation failed, Cleaning up...');
                             }
+                            return removeElmVersion(version.expanded)
+                                .then(() => {
+                                    if (verbose) {
+                                        console.log('FOREST: Finished cleaning up');
+                                    }
+                                    throw err;
+                                });
+                        } else {
                             throw err;
-                        });
-                } else {
-                    throw err;
-                }
+                        }
+                    });
             });
     };
 
@@ -614,32 +649,60 @@ module ForestInternal {
     *  Note that this is a "lazy" check. If the root directory for this version
     *   exists, forest will consider it installed
     */
-    export let isElmInstalled = function(version: ExpandedVersion | string): boolean {
-        return isdir(elmRoot(version));
+    export let isElmInstalled = function(version: ExpandedVersion | string): Promise<boolean> {
+        let root = elmRoot(version);
+
+        let promiseFn = function(
+            resolve: (x: boolean) => any,
+            reject: (err: any) => any
+        ) {
+            fs.stat(root, (err: any, stats: fs.Stats) => {
+                if (err.code === 'ENOENT') {
+                    resolve(false);
+                } else if (err) {
+                    reject(new ForestError(
+                        Errors.IOError,
+                        `Error stating elm directory at ${root}; ${err}`
+                    ));
+                } else {
+                    resolve(stats.isDirectory());
+                }
+            });
+        };
+
+        return new Promise<boolean>(promiseFn);
     };
 
     /* ****************************************************************************
     *  Uninstall an elm version.
     */
     export let removeElmVersion = function(version: string): Promise<boolean> {
-        if (!isElmInstalled(version)) {
-            return new Promise<boolean>((resolve, reject) => {
-                resolve(false);
-            });
-        }
 
-        return new Promise<boolean>((resolve, reject) => {
-            rimraf(elmRoot(version), { glob: false }, (err) => {
-                if (err) {
-                    reject(new ForestError(
-                        Errors.RemovalFailed,
-                        'Failed to remove elm'
-                    ));
+        let makePromise = function(installed: boolean) {
+            let promiseFn = function(
+                resolve: (x: boolean) => any,
+                reject: (err: any) => any
+            ) {
+                if (!installed) {
+                    resolve(false)
                 } else {
-                    resolve(true);
+                    rimraf(elmRoot(version), { glob: false }, (err: any) => {
+                        if (err) {
+                            reject(new ForestError(
+                                Errors.RemovalFailed,
+                                'Failed to remove elm'
+                            ));
+                        } else {
+                            resolve(true);
+                        }
+                    });
                 }
-            });
-        });
+            }
+            return new Promise<boolean>(promiseFn)
+        };
+
+        return isElmInstalled(version)
+            .then(makePromise);
 
     };
 
@@ -794,7 +857,7 @@ module ForestInternal {
  *  Forest API
  */
 export module Forest {
-
+    export let VERSION = FOREST_VERSION;
     export type ExpandedVersion = ForestInternal.ExpandedVersion;
     export type ElmPackage = ForestInternal.ElmPackage;
     export type VersionConstraint = ForestInternal.VersionConstraint;
@@ -968,13 +1031,17 @@ export module Forest {
         }
     };
 
-    let _cliCatch = function(err) {
+    let _cliCatch = function(err: any) {
         if (err instanceof ForestError) {
             console.error("FOREST ERROR: " + err.message);
         } else {
             console.error('Unknown Error', err);
         }
-        process.exit(err.code || 1);
+        if (err.code && typeof err.code == 'number') {
+            process.exit(Math.trunc(err.code));
+        } else {
+            process.exit(1);
+        }
     };
 
     let cliInit = function(args: string[]): void {
@@ -1001,7 +1068,7 @@ export module Forest {
         getVersionList()
             .then((versions) => {
                 // TODO: Consider exposing findSuitable
-                let version : ExpandedVersion | null = findSuitable(want, versions);
+                let version: ExpandedVersion | null = findSuitable(want, versions);
                 if (version === null) {
                     throw new ForestError(
                         Errors.NoMatchingVersion,
@@ -1009,7 +1076,7 @@ export module Forest {
                     );
                 } else {
                     // Typescript wont accept that version can't be null here...
-                    let typescriptFix : ExpandedVersion = version;
+                    let typescriptFix: ExpandedVersion = version;
                     return install(typescriptFix, true)
                         .then(() => {
                             console.log('Installed Elm', typescriptFix.expanded);
