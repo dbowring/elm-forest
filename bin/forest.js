@@ -39,14 +39,32 @@ var parser = function () {
         removeCmd(args.slice(1));
     }
     else if (subcommand === 'npm') {
-        forest.findPackage(process.cwd())
+        forest.findLocalPackage()
+            .catch((err) => {
+            if (err.name === forest.Errors.NoElmProject) {
+                console.error(err.message);
+                process.exit(err.name);
+            }
+            else {
+                console.error('Unknown Error', err);
+                process.exit(1);
+            }
+        })
             .then((packagePath) => {
             return forest.packageBestVersion(packagePath);
         }).then((version) => {
-            return forest.runNpmCommand(version, args.slice(1));
+            return forest.runNpmCommand(version, args.slice(1), true)
+                .catch((err) => {
+                if (err.name === forest.Errors.NpmCommandFailed) {
+                    process.exit(err.code);
+                }
+                process.exit(1);
+            }).then(() => {
+                process.exit(0);
+            });
         });
     }
-    else if (subcommand === '--') {
+    else if (subcommand === '--' || subcommand === 'elm') {
         forest.runInBest(process.cwd(), args.slice(1))
             .then((code) => process.exit(code))
             .catch((err) => {

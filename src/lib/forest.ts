@@ -29,6 +29,13 @@ var ROOT: string = '~/.elm-forest/';
  */
 var ELM_NPM_URL: string = "https://registry.npmjs.org/elm";
 
+/**
+ * Regex Pattern for supported versions
+ * <major>[.minor[.patch[-testStage[stageIncrementor]]]]
+ * E.g., "0", "0.17", "0.17.1", "0.18.0-beta", "0.17.0-alpha2"
+ */
+var VERSION_PATTERN = /^(?:(\d)+(?:(?:\.)(\d+)(?:(?:\.)(\d+))?)?)(?:-([^\d]+)(\d+)?)?$/
+
 /* ****************************************************************************
  *  Public API
  */
@@ -39,7 +46,8 @@ var ELM_NPM_URL: string = "https://registry.npmjs.org/elm";
  */
 export enum Errors {
     // TODO: I may also make these the exit codes for the cli
-    NoElmVersions = 1,
+    // code 1 is reserved for unexpected porcess termination
+    NoElmVersions = 2,
     NpmCommunicationError,
     BinPathWriteFailed,
     BinPathReadFailed,
@@ -54,12 +62,14 @@ export enum Errors {
     NpmElmInstallFailed,
     NpmBinFailed,
     NpmRunFailed,
-    CantExpandVersion
+    CantExpandVersion,
+    NpmCommandFailed
 };
 
-export let ForestError = function(name: Errors, message: string): void {
+export let ForestError = function(name: Errors, message: string, code?: number): void {
     this.name = name;
     this.message = message;
+    this.code = code || 1;
 };
 
 /**
@@ -180,20 +190,20 @@ export let installVersion = function(version: string): Promise<[string, boolean]
         return mkdirp(elmRoot(version))
             .then(function() {
                 console.log('Preparing enviroment for', version);
-                return runNpmCommand(version, ['init', '-y'])
+                return runNpmCommand(version, ['init', '-y'], false)
                     .catch((err) => {
                         throw new ForestError(Errors.NpmInitFailed, "npm init failed");
                     });
             }).then((_) => {
                 console.log('Installing...');
                 let ver = 'elm@' + version;
-                return runNpmCommand(version, ['install', '--save', ver])
+                return runNpmCommand(version, ['install', '--save', ver], false)
                     .catch((err) => {
                         throw new ForestError(Errors.NpmElmInstallFailed, `\`npm install ${ver}\` failed`);
                     });
             }).then((_) => {
                 console.log('Finalizing...');
-                return runNpmCommand(version, ['bin'])
+                return runNpmCommand(version, ['bin'], false)
                     .catch((err) => {
                         throw new ForestError(Errors.NpmBinFailed, "failed to bind elm binary");
                     });
@@ -377,24 +387,41 @@ export let runIn = function(version: string, args: string[]): Promise<number> {
         });
 };
 
-export let runNpmCommand = function(version: string, args: string[]): Promise<string> {
+export let runNpmCommand = function(version: string, args: string[], pipe: boolean): Promise<string> {
     let spawnOpts = { cwd: elmRoot(version) };
     let buffers: Buffer[] = [];
 
     return new Promise<string>((resolve, reject) => {
         let child = spawn('npm', args, spawnOpts);
 
+        if (pipe) {
+            child.stdout.pipe(process.stdout);
+            child.stderr.pipe(process.stderr);
+            process.stdin.pipe(child.stdin);
+            process.stdin.resume();
+        }
+
         child.stdout.on('data', (data: Buffer) => {
             buffers.push(data);
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code: number) => {
+            if (pipe) {
+                process.stdin.pause();
+                process.stdin.unpipe();
+            }
             if (code === 0) {
                 let str = Buffer.concat(buffers).toString('utf-8');
                 return resolve(str);
             }
-            reject(`failed to get npm bin path (exit code ${code})`)
+            // Use reject instead of throw here because we are in a callback
+            reject(ForestError(
+                Errors.NpmCommandFailed,
+                `npm command failed with exit code ${code}`,
+                code
+            ));
         });
+
     }).catch((err) => {
         throw new ForestError(Errors.NpmRunFailed, err);
     });
@@ -404,17 +431,17 @@ export let findBestVersion = function(constraints) {
     // Check local cache, then remote
     return new Promise<string>((resolve, reject) => {
         readVersionCache()
-            .then((versions) => {
+            .then((versions: string[]) => {
                 return selectBestVersion(versions, constraints);
             })
-            .then((best) => {
+            .then((best: string) => {
                 return resolve(best);
             })
             .catch(() => {
                 return getElmVersions()
-                    .then((versions) => {
+                    .then((versions: string[]) => {
                         return selectBestVersion(versions, constraints);
-                    }).then((best) => {
+                    }).then((best: string) => {
                         return resolve(best);
                     })
             })
@@ -425,8 +452,44 @@ export let findBestVersion = function(constraints) {
 *  Internal API
 */
 
-var parseVersion = function(s): number[] {
-    return s.split('-')[0].split('.').map((d) => parseInt(d));
+
+/* ****************************************************************************
+*  Parse a release stage into a number
+*/
+var versionStageToInt = function(name: string | undefined): number {
+    if (name === undefined || name === 'stable') {
+        return Number.MAX_SAFE_INTEGER;
+    } else if (name === 'alpha'){
+        return 1;
+    } else if (name == 'beta') {
+        return 2;
+    } else {
+        // Possibly something like "RC", but for not officially supported
+        return 3;
+    }
+}
+
+/* ****************************************************************************
+*  Parse a version string into an array of ints in the form
+* `[major, minor, patch, testStage, stageIncrementor]`
+* `major` has not default, the rest default as follows:
+*    `minor = 0`, `patch=0`,
+*   `testStage=Number.MAX_SAFE_INTEGER`, `stageIncrementor=0`
+*/
+var parseVersion = function(s: string): number[] | null {
+    //var pattern = VERSION_PATTERN;
+    var match = s.match(VERSION_PATTERN);
+
+    if (match) {
+        return [
+            parseInt(match[1]), // major
+            parseInt(match[2] || "0"), // minor
+            parseInt(match[3] || "0"), // patch
+            versionStageToInt(match[4]), // stage
+            parseInt(match[5] || "0"), // stageIncrementor
+        ]
+    }
+    return null;
 };
 
 let parseVersionConstraint = function(constraint: string): null | ((v: any[]) => boolean)[] {
@@ -460,9 +523,16 @@ let parseVersionConstraint = function(constraint: string): null | ((v: any[]) =>
     return null;
 };
 
-let testVersionConstraint = function(constraints, version) {
+let testVersionConstraint = function(
+    constraints: ((x: number[]) => boolean)[],
+    version: string
+): boolean {
     let thisVersion = parseVersion(version);
-    return constraints.every((c) => c(thisVersion));
+    if (thisVersion === null) {
+        return false;
+    } else {
+        return constraints.every((c) => c(thisVersion));
+    }
 };
 
 let selectBestVersion = function(versions: string[], constraints): Promise<string> {
