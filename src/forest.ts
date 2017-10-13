@@ -6,7 +6,6 @@ import * as npmlog from 'npmlog'
 import * as expandHomeDir from 'expand-home-dir'
 import * as path from 'path'
 import * as fs from 'fs'
-import * as mkdirp from 'mkdirp-promise'
 import * as jsonfile from 'jsonfile'
 import { spawn } from 'child_process'
 import * as rimraf from 'rimraf'
@@ -119,7 +118,7 @@ module ForestInternal {
                 resolve: (y: VersionConstraint) => any,
                 reject: (x: any) => any
             ) {
-                jsonfile.readFile(self.path, (err: any, object: { 'elm-version'?: any }) => {
+                jsonfile.readFile(self.path, (err: any, data: { 'elm-version'?: any }) => {
                     if (err) {
                         throw new ForestError(
                             Errors.BadElmPackage,
@@ -127,7 +126,7 @@ module ForestInternal {
                         );
                     }
 
-                    let versionLimit = object['elm-version'];
+                    let versionLimit = data['elm-version'];
                     if (versionLimit === undefined) {
                         throw new ForestError(
                             Errors.NoVersionConstraint,
@@ -284,6 +283,65 @@ module ForestInternal {
         return null;
     };
 
+
+    /**
+     * Check if directory exists
+     */
+    let isDir = function(dirname: string) : Promise<boolean> {
+        let promiseFn = function(resolve, reject) {
+            fs.stat(dirname, (err: any, stats: fs.Stats) => {
+                    if (err) {
+                        if (err.code === 'ENOENT') {
+                            resolve(false);
+                        } else {
+                            reject(new ForestError(
+                                Errors.IOError,
+                                `Error stating directory at ${dirname}; ${err}`
+                            ));
+                        }
+                    } else {
+                        resolve(stats.isDirectory());
+                    }
+                });
+        };
+        return new Promise<boolean>(promiseFn);
+    };
+
+    /**
+     * Non-Recursive mkdir
+     */
+    let mkdir = function(dirname: string) : Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            fs.mkdir(dirname, (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(dirname);
+                }
+            });
+        });
+    };
+
+    /**
+     * Recursive mkdir
+     */
+    let mkdirp = async function(dirname: string): Promise<string> {
+        let current = path.normalize(path.resolve(dirname));
+        let doMake: string[] = [];
+
+        while (!(await isDir(current))) {
+            doMake.push(current);
+            current = path.dirname(current);
+        }
+
+        let next = doMake.pop();
+        while (next) {
+            await mkdir(next);
+            next = doMake.pop();
+        }
+
+        return dirname;
+    };
 
     /**
      *  Get the root directory for forest to store data files
