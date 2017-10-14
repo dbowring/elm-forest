@@ -837,12 +837,11 @@ module ForestInternal {
     *   prepended to PATH.
     */
     let environSpawn = async function(version: ExpandedVersion, cmd: string, args: string[]) {
-        let binpath = getBinPath(version);
+        let binpath = await getBinPath(version);
         let parentEnv = process.env;
         let childPath = binpath + path.delimiter + parentEnv.PATH;
         let env = { ...parentEnv, PATH: childPath }
         let spawnOpts = { cwd: process.cwd(), env: env };
-
         return Promise.resolve(spawn(cmd, args, spawnOpts));
     };
 
@@ -874,7 +873,7 @@ module ForestInternal {
     */
     export let runIn = async function(version: ExpandedVersion, args: string[]): Promise<number> {
         await ensureInstalled(version, true)
-        let child = await  environSpawn(version, 'elm', args);
+        let child = await environSpawn(version, 'elm', args);
 
         return new Promise<number>((resolve, reject) => {
             child.stdout.pipe(process.stdout);
