@@ -869,11 +869,18 @@ module ForestInternal {
     };
 
     /* ****************************************************************************
-    *  Get the result of `npm bin` in the container for a specific elm version
+    *  Run a elm command on the given version
     */
     export let runIn = async function(version: ExpandedVersion, args: string[]): Promise<number> {
+        return runCommandIn(version, 'elm', args);
+    };
+
+    /* ****************************************************************************
+    *  Run a command under the environment of the given version
+    */
+    export let runCommandIn = async function(version: ExpandedVersion, cmd: string, args: string[]): Promise<number> {
         await ensureInstalled(version, true)
-        let child = await environSpawn(version, 'elm', args);
+        let child = await environSpawn(version, cmd, args);
 
         return new Promise<number>((resolve, reject) => {
             child.stdout.pipe(process.stdout);
@@ -888,7 +895,7 @@ module ForestInternal {
                 } else {
                     reject(new ForestError(
                         Errors.ElmCommandFailed,
-                        `elm command failed with exit code ${code}`,
+                        `${cmd} command failed with exit code ${code}`,
                         code
                     ));
                 }
@@ -1019,6 +1026,7 @@ export module Forest {
 
     export let isInstalled = ForestInternal.isElmInstalled;
     export let runElm = ForestInternal.runIn;
+    export let runCommand = ForestInternal.runCommandIn;
     export let findSuitable = ForestInternal.findSuitable;
     export let expandVersion = ForestInternal.expandVersion;
 
