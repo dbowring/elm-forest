@@ -78,6 +78,7 @@ module ForestInternal {
         NpmRunFailed,
         NpmCommandFailed,
         ElmCommandFailed,
+        CommandFailed,
 
         // New Errors
         VersionNoExactMatch,
@@ -872,7 +873,14 @@ module ForestInternal {
     *  Run a elm command on the given version
     */
     export let runIn = async function(version: ExpandedVersion, args: string[]): Promise<number> {
-        return runCommandIn(version, 'elm', args);
+        return runCommandIn(version, 'elm', args)
+            .catch((err) => {
+                if (err instanceof ForestError && err.code === Errors.CommandFailed) {
+                    throw new ForestError(Errors.ElmCommandFailed, err.message);
+                } else {
+                    throw err;
+                }
+            });
     };
 
     /* ****************************************************************************
@@ -894,7 +902,7 @@ module ForestInternal {
                     resolve(code)
                 } else {
                     reject(new ForestError(
-                        Errors.ElmCommandFailed,
+                        Errors.CommandFailed,
                         `${cmd} command failed with exit code ${code}`,
                         code
                     ));

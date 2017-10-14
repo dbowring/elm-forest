@@ -1,6 +1,6 @@
 {
   "name": "elm-forest",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Elm version manager and proxy",
   "main": "lib/forest.js",
   "scripts": {
