@@ -6,6 +6,8 @@ An elm version manager and proxy
 
 `npm install -g elm-forest`
 
+You may also wish to install (`elm-forest-aliases`)[https://github.com/dbowring/elm-forest-aliases]
+
 
 ## Quickstart
 
