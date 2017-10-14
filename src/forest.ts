@@ -937,6 +937,11 @@ export module Forest {
     export let ForestError = ForestInternal.ForestError;
     export let Errors = ForestInternal.Errors;
 
+    export type CurrentPackage = {
+        package: ElmPackage,
+        version: ExpandedVersion
+    };
+
     /**
      * Get a list of available Elm versions from NPM
      */
@@ -946,7 +951,7 @@ export module Forest {
      * Get the elm version that should be used with the closest package
      * If verbose is truthy, show a message if a query is made to npm
      */
-    export let current = async function(verbose?: boolean): Promise<ExpandedVersion> {
+    export let current = async function(verbose?: boolean): Promise<CurrentPackage> {
 
         let elm = await ForestInternal.findLocalPackage();
         let constraint = await elm.queryConstraints();
@@ -977,7 +982,7 @@ export module Forest {
             return Promise.resolve(versions);
         };
 
-        let tryOnline = async function(): Promise<ExpandedVersion> {
+        let tryOnline = async function(): Promise<CurrentPackage> {
             if (!!verbose) {
                 console.log('FOREST: Checking npm...');
             }
@@ -990,14 +995,14 @@ export module Forest {
                     'Unable to find a suitable elm version'
                 );
             }
-            return Promise.resolve(version);
+            return Promise.resolve({package: elm, version: version});
         };
 
         let cachedVersions = await getCachedVersions();
 
         for (let version of cachedVersions) {
             if (constraint.match(version)) {
-                return Promise.resolve(version);
+                return Promise.resolve({package: elm, version: version});
             }
         }
         return tryOnline();
@@ -1134,8 +1139,9 @@ export module Forest {
     };
 
     let cliCurrent = async function(args: string[]): Promise<void> {
-        let version = await current(true);
-        console.log(version.expanded);
+        let project = await current(true);
+        var dirname = path.dirname(project.package.path);
+        console.log(`Elm project at \`${dirname}\` using ${project.version.expanded}`);
     };
 
     let cliRemove = async function(args: string[]): Promise<void> {
@@ -1153,14 +1159,14 @@ export module Forest {
     };
 
     let cliElm = async function(args: string[]): Promise<void> {
-        let version = await current(true);
-        await runElm(version, args);
+        let project = await current(true);
+        await runElm(project.version, args);
         process.exit(0);
     };
 
     let cliNpm = async function(args: string[]): Promise<void> {
-        let version = await current(true);
-        await runNpm(version, args);
+        let project = await current(true);
+        await runNpm(project.version, args);
         process.exit(0);
     };
 
